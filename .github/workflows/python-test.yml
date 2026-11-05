@@ -1,1 +1,0 @@
-# CI - pdm install, ruff check, pytest, run the assistant test set and upload results artifact.
