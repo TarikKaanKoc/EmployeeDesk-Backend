@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: employeedesk
+          POSTGRES_USER: employeedesk
+          POSTGRES_PASSWORD: employeedesk
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U employeedesk -d employeedesk"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DEBUG: "true"
+      RATE_LIMITING: "false"
+      DATABASE_URL: postgresql+asyncpg://employeedesk:employeedesk@127.0.0.1:5433/employeedesk
+      REDIS_URL: redis://127.0.0.1:6380/0
+      JWT_SECRET_KEY: ci-only-signing-key
+      MOCK_ERP_URL: http://127.0.0.1:8013
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.14"
+          cache: true
+      - run: pdm install --frozen-lockfile
+      - run: pdm run lint
+      - run: pdm run migrate
+      - run: pdm run seed
+      - run: pdm run set-password --all Synthetic-Pass-1
+      - run: pdm run test
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

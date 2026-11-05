@@ -1,1 +1,76 @@
-# CD - build image, push to ACR (Qatar Central), apply k8s manifests to AKS.
+# CD: build the API image in Azure Container Registry, run migrations through
+# the seed job, then roll new revisions of the API and the mock ERP.
+#
+# Authentication is OIDC: a federated credential on an Entra app, no secret
+# stored in GitHub. Repository secrets expected:
+#   AZURE_CLIENT_ID · AZURE_TENANT_ID · AZURE_SUBSCRIPTION_ID
+# Repository variables expected:
+#   AZURE_RESOURCE_GROUP · AZURE_ACR_NAME
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    env:
+      RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+      ACR: ${{ vars.AZURE_ACR_NAME }}
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push (linux/amd64)
+        run: |
+          az acr build -r "$ACR" --platform linux/amd64 \
+            -t "employeedesk-api:$TAG" -t employeedesk-api:latest .
+          az acr build -r "$ACR" --platform linux/amd64 --target tools \
+            -t "employeedesk-api:tools-$TAG" -t employeedesk-api:tools .
+
+      - name: Migrate (seed job, idempotent)
+        run: |
+          az containerapp job update -g "$RG" -n employeedesk-seed \
+            --image "$ACR.azurecr.io/employeedesk-api:tools-$TAG" -o none
+          az containerapp job start -g "$RG" -n employeedesk-seed -o none
+          for i in $(seq 1 40); do
+            sleep 15
+            st=$(az containerapp job execution list -g "$RG" -n employeedesk-seed --query "[0].properties.status" -o tsv)
+            echo "seed: $st"
+            case "$st" in Succeeded) break;; Failed) exit 1;; esac
+          done
+
+      - name: Roll the mock ERP
+        run: |
+          az containerapp update -g "$RG" -n employeedesk-erp \
+            --image "$ACR.azurecr.io/employeedesk-api:$TAG" --revision-suffix "g${TAG:0:7}" -o none
+
+      - name: Roll the API
+        run: |
+          az containerapp update -g "$RG" -n employeedesk-api \
+            --image "$ACR.azurecr.io/employeedesk-api:$TAG" --revision-suffix "g${TAG:0:7}" -o none
+
+      - name: Smoke test
+        run: |
+          fqdn=$(az containerapp show -g "$RG" -n employeedesk-web --query properties.configuration.ingress.fqdn -o tsv)
+          curl -fsS -o /dev/null "https://$fqdn/login"

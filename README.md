@@ -64,3 +64,7 @@ tests/                  pytest + the evaluation set
 | Assistant (`/assistant/chat`, `/assistant/chat/stream`, `/assistant/confirm/{id}`, conversations, `/audit/me`) | done |
 | Test set runner + results (`pdm run test-set`, `pdm run test-report`, `docs/TEST_RESULTS.md`) | done |
 | Dockerfile, k8s manifests (`deploy/k8s`), Azure note (`deploy/azure`) | done |
+
+## CI/CD
+
+`ci.yml` runs ruff, migrations, the seed and pytest against Postgres + Redis service containers on every push and pull request, and builds the image without pushing. `deploy.yml` runs after a green CI on `main`: it builds the images in Azure Container Registry, runs the seed job for migrations, rolls new revisions of the mock ERP and the API and smoke-tests the console. It signs in to Azure with OIDC; the repository needs the secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` and the variables `AZURE_RESOURCE_GROUP`, `AZURE_ACR_NAME`.
