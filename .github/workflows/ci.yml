@@ -38,7 +38,7 @@ jobs:
       JWT_SECRET_KEY: ci-only-signing-key
       MOCK_ERP_URL: http://127.0.0.1:8013
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pdm-project/setup-pdm@v4
         with:
           python-version: "3.14"
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - name: Build the image (no push)
         uses: docker/build-push-action@v6
