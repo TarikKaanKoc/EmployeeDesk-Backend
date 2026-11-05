@@ -1,0 +1,35 @@
+# kubectl apply -k deploy/k8s
+#
+# Images are named without a registry here and pinned per release:
+#   kustomize edit set image employeedesk-api=<acr>.azurecr.io/employeedesk-api:<sha>
+#   kustomize edit set image employeedesk-web=<acr>.azurecr.io/employeedesk-web:<sha>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: employeedesk
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: employeedesk
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - secret-provider.yaml
+  - job-migrate.yaml
+  - deployment-api.yaml
+  - deployment-mock-erp.yaml
+  - deployment-web.yaml
+  - service-api.yaml
+  - service-mock-erp.yaml
+  - service-web.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+images:
+  - name: employeedesk-api
+    newName: acremployeedesk.azurecr.io/employeedesk-api
+    newTag: "0.0.1"
+  - name: employeedesk-web
+    newName: acremployeedesk.azurecr.io/employeedesk-web
+    newTag: "0.0.1"

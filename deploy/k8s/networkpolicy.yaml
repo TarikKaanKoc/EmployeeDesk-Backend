@@ -1,0 +1,132 @@
+# Default deny, then exactly the paths the system needs:
+#   ingress controller -> web -> api -> { mock-erp, postgres, redis, model endpoint }
+# Postgres, Redis and the model endpoint are Azure PaaS outside the cluster,
+# reached by private endpoint; the egress rule below allows the VNet only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: employeedesk
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: employeedesk
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web
+  namespace: employeedesk
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: employeedesk-web
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: employeedesk-api
+      ports:
+        - port: 8012
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api
+  namespace: employeedesk
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: employeedesk-api
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: employeedesk-web
+      ports:
+        - port: 8012
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: employeedesk-mock-erp
+      ports:
+        - port: 8013
+    # Postgres, Redis, Key Vault and Azure OpenAI private endpoints in the VNet.
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - port: 5432
+        - port: 6380
+        - port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mock-erp
+  namespace: employeedesk
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: employeedesk-mock-erp
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: employeedesk-api
+      ports:
+        - port: 8013
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - port: 5432
+        - port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: migrate
+  namespace: employeedesk
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: employeedesk-migrate
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - port: 5432
+        - port: 443

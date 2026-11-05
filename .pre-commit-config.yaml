@@ -1,0 +1,49 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-ast
+      - id: check-docstring-first
+      - id: check-executables-have-shebangs
+      - id: check-toml
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [ '--maxkb=2048' ]
+        exclude: ^logo/
+      - id: forbid-new-submodules
+      - id: pretty-format-json
+        args: ['--autofix', '--no-sort-keys', '--indent=4', '--no-ensure-ascii']
+      - id: end-of-file-fixer
+        exclude: .ipynb
+      - id: mixed-line-ending
+        args: [ '--fix=auto' ]
+      - id: debug-statements
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.19.1
+    hooks:
+      - id: pyupgrade
+        args:
+          - --py3-plus
+          - --keep-runtime-typing
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.8
+    hooks:
+      - id: ruff
+        args: [ --fix ]
+      - id: ruff-format
+
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        name: isort (python)
+        args: ["--profile", "black"]
+
+ci:
+  autofix_commit_msg: "fix(pr): 🎨 auto format pre-commit hooks"
+  autoupdate_commit_msg: "fix(pr): ⬆ auto pre-commit update"

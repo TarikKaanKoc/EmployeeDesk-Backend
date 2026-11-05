@@ -1,0 +1,37 @@
+# Non-secret configuration. Anything that must not appear in git or in
+# `kubectl describe` lives in Key Vault (see secret-provider.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: employeedesk-config
+  namespace: employeedesk
+data:
+  APP_NAME: employeedesk-api
+  DEBUG: "false"
+  DEFAULT_LANGUAGE: en
+  RATE_LIMITING: "true"
+  # Hostnames the API answers to; the ingress controller sets Host.
+  ALLOWED_HOSTS: "api.employeedesk.example,employeedesk-api.employeedesk.svc"
+  CORS_ORIGINS: "https://employeedesk.example"
+  # The ingress controller's pod CIDR, so X-Forwarded-For is trusted only from it.
+  TRUSTED_PROXY_IPS: "10.244.0.0/16"
+  MOCK_ERP_URL: "http://employeedesk-mock-erp.employeedesk.svc:8013"
+  # Azure OpenAI (resource-level /openai/v1 endpoint, same region as the cluster).
+  AZURE_OPENAI_BASE_URL: "https://aif-employeedesk-qatar.services.ai.azure.com/openai/v1"
+  AZURE_OPENAI_CHAT_DEPLOYMENT: gpt-5.4-mini
+  AZURE_OPENAI_REASONING_EFFORT: minimal
+  AZURE_OPENAI_EMBEDDING_DEPLOYMENT: text-embedding-3-small
+  EMBEDDING_DIMENSIONS: "1536"
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  JWT_REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  WEB_CONCURRENCY: "2"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: employeedesk-web-config
+  namespace: employeedesk
+data:
+  # Server-side only; the browser never sees it. The web pod talks to the
+  # API over the cluster network, not through the public ingress.
+  API_URL: "http://employeedesk-api.employeedesk.svc:8012/api"

@@ -1,0 +1,125 @@
+# Local stack. Not a production manifest: ports are bound to the loopback
+# interface and the credentials below are compose-only; production reads
+# every secret from Key Vault (see deploy/k8s and deploy/azure).
+#
+#   docker compose up -d postgres redis      what `pdm run dev` needs
+#   docker compose --profile app up --build  the whole thing in containers:
+#                                            migrate + seed, mock ERP, API, web
+#
+# Model access is read from .env (AZURE_OPENAI_*). Without it the API still
+# starts: policy search is keyword-only and the assistant is unavailable.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: employeedesk-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      - POSTGRES_DB=employeedesk
+      - POSTGRES_USER=employeedesk
+      - POSTGRES_PASSWORD=employeedesk
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U employeedesk -d employeedesk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: employeedesk-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # One-shot: migrations, the synthetic workbook, and a password on every
+  # synthetic account. Idempotent, so it is safe on every `up`. The seed
+  # script and workbook are mounted rather than baked into the image, which
+  # stays free of fixtures.
+  init:
+    profiles: ["app"]
+    build: .
+    image: employeedesk-api:local
+    container_name: employeedesk-init
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://employeedesk:employeedesk@postgres:5432/employeedesk
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./seed:/app/seed:ro
+    entrypoint: ["./startup.sh"]
+    command: ["seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mock-erp:
+    profiles: ["app"]
+    image: employeedesk-api:local
+    container_name: employeedesk-mock-erp
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - PORT=8013
+      - HEALTH_PATH=/health
+      - DATABASE_URL=postgresql+asyncpg://employeedesk:employeedesk@postgres:5432/employeedesk
+    command: ["mock-erp"]
+    ports:
+      - "127.0.0.1:8013:8013"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  api:
+    profiles: ["app"]
+    image: employeedesk-api:local
+    container_name: employeedesk-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - PORT=8012
+      - DATABASE_URL=postgresql+asyncpg://employeedesk:employeedesk@postgres:5432/employeedesk
+      - REDIS_URL=redis://redis:6379/0
+      - MOCK_ERP_URL=http://mock-erp:8013
+      # Compose-only. Blank in .env would make the API mint a key per start
+      # and sign everyone out on every restart.
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-compose-only-signing-key-not-for-production}
+      - CORS_ORIGINS=http://localhost:3012
+    ports:
+      - "127.0.0.1:8012:8012"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mock-erp:
+        condition: service_started
+
+  web:
+    profiles: ["app"]
+    build: ../EmployeeDesk-Frontend
+    image: employeedesk-web:local
+    container_name: employeedesk-web
+    restart: unless-stopped
+    environment:
+      - PORT=3012
+      - API_URL=http://api:8012/api
+    ports:
+      - "127.0.0.1:3012:3012"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:

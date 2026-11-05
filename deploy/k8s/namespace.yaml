@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: employeedesk
+  labels:
+    app.kubernetes.io/part-of: employeedesk
+    # Pod Security Standards: nothing in this namespace may run privileged,
+    # as root, or with a writable root filesystem.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

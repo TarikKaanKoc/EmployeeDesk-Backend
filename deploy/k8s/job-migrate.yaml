@@ -1,0 +1,61 @@
+# Schema migrations run once per release, before the new API pods roll.
+# Same image as the API; `startup.sh migrate` is `alembic upgrade head`.
+# Seeding the synthetic workbook is a manual step (see README), not a job:
+# fixtures do not belong in a production rollout.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: employeedesk-migrate
+  namespace: employeedesk
+  labels:
+    app.kubernetes.io/name: employeedesk-migrate
+    app.kubernetes.io/part-of: employeedesk
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: employeedesk-migrate
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: employeedesk-api
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: employeedesk-api
+          args: ["migrate"]
+          envFrom:
+            - configMapRef:
+                name: employeedesk-config
+            - secretRef:
+                name: employeedesk-secrets
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: employeedesk-keyvault

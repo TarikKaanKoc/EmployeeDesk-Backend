@@ -1,0 +1,1 @@
+# CD - build image, push to ACR (Qatar Central), apply k8s manifests to AKS.

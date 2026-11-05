@@ -1,0 +1,33 @@
+# A node drain may take one pod of each at a time, never both.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: employeedesk-api
+  namespace: employeedesk
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: employeedesk-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: employeedesk-mock-erp
+  namespace: employeedesk
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: employeedesk-mock-erp
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: employeedesk-web
+  namespace: employeedesk
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: employeedesk-web

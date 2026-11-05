@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: employeedesk-web
+  namespace: employeedesk
+  labels:
+    app.kubernetes.io/name: employeedesk-web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: employeedesk-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
