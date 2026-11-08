@@ -1,14 +1,14 @@
 # Two stages: the first carries the compilers asyncpg and argon2 need, the
 # second carries only the installed environment and the source. The same
 # image serves the API and the mock ERP; the mock ERP overrides CMD.
-FROM python:3.14-alpine AS builder
+FROM python:3.15-alpine AS builder
 WORKDIR /app
 RUN python -m pip install --no-cache-dir --upgrade pip pdm \
  && apk add --no-cache build-base linux-headers libffi-dev
 COPY pyproject.toml pdm.lock ./
 RUN pdm install --prod --no-editable --no-self
 
-FROM python:3.14-alpine AS runtime
+FROM python:3.15-alpine AS runtime
 WORKDIR /app
 RUN addgroup -S app && adduser -S -G app app \
  && apk add --no-cache libffi
