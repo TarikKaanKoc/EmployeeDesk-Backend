@@ -138,6 +138,42 @@ async def test_own_balance_through_tool(client, auth, model, drop_conversations)
     assert tool_result["employee_id"] == "E1001"
 
 
+async def test_own_purchase_requests_are_listed_without_a_pr_number(
+    client, auth, model, drop_conversations, monkeypatch
+):
+    from src.app.modules.procurement import erp_client
+
+    row = {
+        "pr_number": "PR-260101",
+        "requester_employee_id": "E1001",
+        "department": "Bus Operations",
+        "business_purpose": "Workshop diagnostic tools",
+        "amount_qar": "5000.00",
+        "status": "under_review",
+        "current_step": "Budget validation",
+        "created_date": "2026-08-01",
+        "last_updated": "2026-08-02",
+        "mock_reference": "MOCK-ERP-8101",
+    }
+    asked = []
+
+    async def fake_list(employee_id):
+        asked.append(employee_id)
+        return [row, {**row, "pr_number": "PR-260102", "requester_employee_id": "E1002"}]
+
+    monkeypatch.setattr(erp_client, "list_for_requester", fake_list)
+    fake = model([[("list_purchase_requests", {})], "You have one purchase request."])
+    d = await chat(client, auth, "What are my PRs?")
+    assert d["refused"] is False
+    assert [(t["name"], t["status"]) for t in d["toolCalls"]] == [
+        ("list_purchase_requests", "ok")
+    ]
+    assert asked == ["E1001"]
+    tool_result = json.loads(fake.seen[1][-1]["content"])
+    assert [r["pr_number"] for r in tool_result["requests"]] == ["PR-260101"]
+    assert d["toolCalls"][0]["result"]["total"] == 1
+
+
 async def test_arabic_is_detected_and_prompted_in_arabic(
     client, auth, model, drop_conversations
 ):

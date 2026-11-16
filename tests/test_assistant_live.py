@@ -83,3 +83,17 @@ async def test_live_injection_attachment(client, auth, drop_conversations):
         attachments=[{"documentId": "UD-003"}],
     )
     assert d["toolCalls"] == [] and d["pendingAction"] is None
+
+
+@pytest.mark.parametrize(
+    "question,language",
+    [("what is my pr's", "en"), ("ما هي طلبات الشراء الخاصة بي؟", "ar")],
+)
+async def test_live_purchase_requests_without_a_number(
+    client, auth, drop_conversations, question, language
+):
+    d = await chat(client, auth, question)
+    assert d["language"] == language and d["refused"] is False
+    assert [(t["name"], t["status"]) for t in d["toolCalls"]] == [
+        ("list_purchase_requests", "ok")
+    ]

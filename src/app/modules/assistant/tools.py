@@ -141,6 +141,31 @@ async def draft_leave_request(ctx: ToolContext, args: Dict[str, Any]) -> Dict[st
     }
 
 
+async def list_purchase_requests(
+    ctx: ToolContext, args: Dict[str, Any]
+) -> Dict[str, Any]:
+    try:
+        rows = await procurement.list_requests(ctx.current)
+    except AppError as e:
+        return {"error": e.code, "message": e.message}
+    return {
+        "employee_id": ctx.current.employee_id,
+        "total": len(rows),
+        "requests": [
+            {
+                "pr_number": r.prNumber,
+                "status": r.status.value,
+                "current_step": r.currentStep,
+                "business_purpose": r.businessPurpose,
+                "amount_qar": _num(r.amountQar),
+                "created_date": r.createdDate.isoformat(),
+                "last_updated": r.lastUpdated.isoformat(),
+            }
+            for r in rows[:20]
+        ],
+    }
+
+
 async def get_purchase_request_status(
     ctx: ToolContext, args: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -250,6 +275,15 @@ TOOLS: List[Tool] = [
         },
         handler=draft_leave_request,
         is_write=True,
+    ),
+    Tool(
+        name="list_purchase_requests",
+        description=(
+            "All purchase requests of the signed-in employee with their status. No arguments. "
+            "Use when the person asks about their purchase requests without giving a PR number."
+        ),
+        parameters={"type": "object", "properties": {}, "additionalProperties": False},
+        handler=list_purchase_requests,
     ),
     Tool(
         name="get_purchase_request_status",
